@@ -1,0 +1,8 @@
+[Unit]
+Description=Start OpenVPN autoconnect to my vpn service 
+[Service]
+Type=forking
+User=root
+ExecStart=/opt/OpenVPN/randomize_start.sh
+[Install]
+WantedBy=multi-user.target
