@@ -1,0 +1,15 @@
+#!/bin/bash
+
+value=$1
+
+if [ $value == 'max' ]
+then
+	value=937	
+	echo $value > /sys/class/backlight/intel_backlight/brightness
+elif [ $value == 'lowest' ]
+then
+	value=5
+	echo $value > /sys/class/backlight/intel_backlight/brightness
+else
+	echo $value > /sys/class/backlight/intel_backlight/brightness
+fi
