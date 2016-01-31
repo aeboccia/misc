@@ -23,7 +23,7 @@ then
 	value=5
 	echo $value > /sys/class/backlight/intel_backlight/brightness
 
-elif [ $value != 'lowest' ] || [ $value != 'max' ] && [ $value -lt 938 ] && [ $value -gt 4 ]
+elif [ $value != 'lowest' ] && [ $value != 'max' ] && [ $value -lt 938 ] && [ $value -gt 4 ]
 then
 	echo $value > /sys/class/backlight/intel_backlight/brightness
 else
