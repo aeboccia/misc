@@ -25,6 +25,9 @@ case $value in
 	value=5
 	echo $value > $bkltpath;;
 
+	current )
+	cat $bkltpath ;;
+
 	* )
 	echo $value > $bkltpath;;
 esac
