@@ -1,33 +1,30 @@
 #Backlight control script
-#Simple and full of IFs
-#TODO: Add more brains, use case instead of if maybe.
-
 #!/bin/bash
-
+bkltpath='/sys/class/backlight/intel_backlight/brightness'
 value=$1
 user=`whoami`
 
+#Let's make sure we are running with root privs
 if [ $user != 'root' ]
 then
 	echo "Please execute with root privileges!"
 	exit 1
 fi
 
-if [ $value == 'max' ]
-then
-	value=937	
-	echo $value > /sys/class/backlight/intel_backlight/brightness
+case $value in
+	
+	max )
+	value=937
+	echo $value > $bkltpath ;;
 
-elif [ $value == 'lowest' ]
-then
+	mid )
+	value=469
+	echo $value > $bkltpath;;
+
+	low )
 	value=5
-	echo $value > /sys/class/backlight/intel_backlight/brightness
+	echo $value > $bkltpath;;
 
-elif [ $value != 'lowest' ] && [ $value != 'max' ] && [ $value -lt 938 ] && [ $value -gt 4 ]
-then
-	echo $value > /sys/class/backlight/intel_backlight/brightness
-else
-	echo "Invalid value entered"
-	exit 1
-
-fi
+	* )
+	echo $value > $bkltpath;;
+esac
