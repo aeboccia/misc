@@ -28,6 +28,15 @@ case $value in
 	current )
 	cat $bkltpath ;;
 
+	help )
+	printf "Usage $0 <option>\n
+	Options:\n
+	max - Maximum Brightness\n
+	low - Lowest Brightness (Still able to see scren)\n
+	current - Current value of brightness\n
+	[0-937] - Any numerical value between 0-937\n
+	help - Display this help info and exit\n\n" && exit 0;;
+
 	* )
 	echo $value > $bkltpath;;
 esac
