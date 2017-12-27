@@ -1,3 +1,4 @@
+#!/bin/bash
 #Initialize working tree temporary dir
 gitworkdir=`mktemp -d --suffix=gitworktree`
 
@@ -8,14 +9,15 @@ do
 done
 branch=`echo "$branch_ref" | sed 's/.*\///'`
 
-#Get a list of changed files (Modify the grep to look for more file extenstions)
-git_check=`git log --oneline --name-only --max-count=1 HEAD  | grep -x ".*.pp" `
+#Get a list of changed files, by default yaml and pp
+git_check=`git log $branch --oneline --name-only --max-count=1 HEAD  | egrep -x '.*.pp|.*.yaml|.*.yml'`
 
 #Create our working tree
 git worktree add -f $gitworkdir $branch
 
-#Run puppet-lint
-puppet-lint --with-context $gitworkdir/$git_check
+#Run puppet-lint, parser to check syntax for puppet modules - Should add support for .erb
+for X in $git_check;do puppet-lint $gitworkdir/$X;done
+for Y in $git_check;do if [[ ${Y} =~ .*.pp ]];then puppet parser validate $gitworkdir/$Y;fi;done
 
 #Cleanup our mess
 rm -rf $gitworkdir
