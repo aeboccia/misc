@@ -1,0 +1,22 @@
+#Initialize working tree temporary dir
+gitworkdir=`mktemp -d --suffix=gitworktree`
+
+#Lets parse the git ref and get our branch name
+while read oldrev newrev ref
+do
+    branch_ref="$ref"
+done
+branch=`echo "$branch_ref" | sed 's/.*\///'`
+
+#Get a list of changed files (Modify the grep to look for more file extenstions)
+git_check=`git log --oneline --name-only --max-count=1 HEAD  | grep -x ".*.pp" `
+
+#Create our working tree
+git worktree add -f $gitworkdir $branch
+
+#Run puppet-lint
+puppet-lint --with-context $gitworkdir/$git_check
+
+#Cleanup our mess
+rm -rf $gitworkdir
+git worktree prune
