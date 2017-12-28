@@ -1,23 +1,54 @@
 #!/bin/bash
+
+trigger_pull(){
+#Simple SSH to master and run a pull as the r10k user
+ssh puppetmaster -l r10k -C 'r10k deploy environment'
+}
+
+lintax_check (){
+	local __err_return=$2
+	local git_check=`echo $1| awk '{print $2}'`
+	echo $git_check
+	#Initialize some counters
+	local lerr_count=0
+	local serr_count=0
+
+	#Run yaml-lint or puppet-lint and puppet parser to check cleanliness and syntax for puppet modules - Should add support for .erb
+	if [[ $git_check == *.yaml ]] || [[ $git_check == *.yml ]]
+	then
+		for X in $git_check; do yaml-lint $gitworkdir/$X; let lerr_count=lerr_count+$?; done
+	else
+		for X in $git_check; do puppet-lint $gitworkdir/$X; let lerr_count=lerr_count+$?; done
+		for Y in $git_check; do if [[ ${Y} =~ .*.pp ]];then puppet parser validate $gitworkdir/$Y; let serr_count=serr_count+$?; fi; done
+	fi
+	
+	#Count up our errors and return the value	
+	local err_count=$(($lerr_count + $serr_count))
+	eval $__err_return="'$err_count'"
+}
+
 #Initialize working tree temporary dir
 gitworkdir=`mktemp -d --suffix=gitworktree`
 
 #Lets parse the git ref and get our branch name
-while read oldrev newrev ref
-do
-    branch_ref="$ref"
-done
+while read oldrev newrev ref; do branch_ref="$ref"; done
 branch=`echo "$branch_ref" | sed 's/.*\///'`
-
-#Get a list of changed files, by default yaml and pp
-git_check=`git log $branch --oneline --name-only --max-count=1 HEAD  | egrep -x '.*.pp|.*.yaml|.*.yml'`
 
 #Create our working tree
 git worktree add -f $gitworkdir $branch
 
-#Run puppet-lint, parser to check syntax for puppet modules - Should add support for .erb
-for X in $git_check;do puppet-lint $gitworkdir/$X;done
-for Y in $git_check;do if [[ ${Y} =~ .*.pp ]];then puppet parser validate $gitworkdir/$Y;fi;done
+#Get a list of changed files, by default yaml and pp
+git_check=`git log $branch --oneline --name-status --max-count=1 HEAD  | egrep -x '.*.pp|.*.yaml|.*.yml'`
+
+#Change the Input Field Seperator to \n, this will allow the foor loop below to split each item at the \n instead of a <SPACE> which is the default.
+SAVEIFS=$IFS
+IFS=$(echo -en "\n\b")
+
+#Here we start by using sed to change every git status letter occurance such as "D" to itself plus the file path on a new line, this allows the foor loop to treat each new line as the next item using the IFS of \n specified above. Then Check for deletes, if we find them we must ignore them, trigger function for valid undeleted files and run lint and syntax checks on them.
+for X in $(echo $git_check | sed 's/\([A-Z]\)/ \n\1/g');do if [[ $X =~ ^D ]]; then :; else lintax_check $X err_return; fi; done
+
+#If err_return is 0 then lets trigger a pull of the new files on the master
+if [[ "$err_return" -eq 0 ]]; then echo "Commit is clean, triggering a pull on the puppetmaster"; trigger_pull; else echo "Errors detected, please correct the above issues and re-push"; fi
 
 #Cleanup our mess
 rm -rf $gitworkdir
