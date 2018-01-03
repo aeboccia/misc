@@ -1,8 +1,34 @@
 #!/bin/bash
 
 trigger_pull(){
-#Simple SSH to master and run a pull as the r10k user
-ssh puppetmaster -l r10k -C 'r10k deploy environment'
+
+#We only want to check if the branch is production, if it is then check all manifest files and templates before comitting.
+branch=$1
+#Variables for Error Checks
+local plerr_count=0
+local ylerr_count=0
+local pserr_count=0
+
+if [ $branch == 'production' ]
+then
+	echo "Pushing to Production!, Performing check of all files in repo" && echo
+	puppet-lint $gitworkdir; let plerr_count=plerr_count+$?
+	yaml-lint -q -i $gitworkdir; let ylerr_count=ylerr_count+$?
+	/opt/puppetlabs/bin/puppet parser validate $gitworkdir; let pserr_count=pserr_count+$?
+fi
+
+#Get a count of any errors
+err_count=$(($plerr_count + $plerr_count + $ylerr_count))
+
+if [[ "$err_count" -eq 0 ]]
+then
+	echo "Repo is clean, triggering a pull on the puppetmaster"
+	#Simple SSH to master and run a pull as the r10k user
+	ssh puppetmaster -l r10k -C 'r10k deploy environment'
+elif [[ $err_count -ne 0 ]]
+then
+	echo "Errors found, abandoning pull on the master"
+fi
 }
 
 lintax_check (){
@@ -14,18 +40,20 @@ lintax_check (){
 	local serr_count=0
 
 	#Run yaml-lint or puppet-lint and puppet parser to check cleanliness and syntax for puppet modules - Should add support for .erb
-	if [[ $git_check == *.yaml ]] || [[ $git_check == *.yml ]]
+	if [[ $git_check == *.yaml ]] || [[ $git_check == *.yml ]] || [[ $git_check == *.eyaml ]] || [[ $git_check == *.eyml ]]
 	then
 		for X in $git_check; do yaml-lint $gitworkdir/$X; let lerr_count=lerr_count+$?; done
 	else
 		for X in $git_check; do puppet-lint $gitworkdir/$X; let lerr_count=lerr_count+$?; done
-		for Y in $git_check; do if [[ ${Y} =~ .*.pp ]];then puppet parser validate $gitworkdir/$Y; let serr_count=serr_count+$?; fi; done
+		for Y in $git_check; do if [[ ${Y} =~ .*.pp ]];then /opt/puppetlabs/bin/puppet parser validate $gitworkdir/$Y; let serr_count=serr_count+$?; fi; done
 	fi
 	
 	#Count up our errors and return the value	
 	local err_count=$(($lerr_count + $serr_count))
 	eval $__err_return="'$err_count'"
 }
+
+##MAIN LOGIC###
 
 #Initialize working tree temporary dir
 gitworkdir=`mktemp -d --suffix=gitworktree`
@@ -38,7 +66,7 @@ branch=`echo "$branch_ref" | sed 's/.*\///'`
 git worktree add -f $gitworkdir $branch
 
 #Get a list of changed files, by default yaml and pp
-git_check=`git log $branch --oneline --name-status --max-count=1 HEAD  | egrep -x '.*.pp|.*.yaml|.*.yml'`
+git_check=`git log $branch --oneline --name-status --max-count=1 HEAD  | egrep -x '.*.pp|.*.yaml|.*.yml|.*.eyaml|.*.eyml'`
 
 #Change the Input Field Seperator to \n, this will allow the foor loop below to split each item at the \n instead of a <SPACE> which is the default.
 SAVEIFS=$IFS
@@ -48,7 +76,7 @@ IFS=$(echo -en "\n\b")
 for X in $(echo $git_check | sed 's/\([A-Z]\)/ \n\1/g');do if [[ $X =~ ^D ]]; then :; else lintax_check $X err_return; fi; done
 
 #If err_return is 0 then lets trigger a pull of the new files on the master
-if [[ "$err_return" -eq 0 ]]; then echo "Commit is clean, triggering a pull on the puppetmaster"; trigger_pull; else echo "Errors detected, please correct the above issues and re-push"; fi
+if [[ "$err_return" -eq 0 ]]; then trigger_pull $branch; else echo "Errors detected, please correct the above issues and re-push"; fi
 
 #Cleanup our mess
 rm -rf $gitworkdir
